@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Quantum-Resilient Cryptographic Framework - POC Dashboard for Objective 1">
+    <title>Quantum-Resilient Cryptographic Framework</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">⚛️</div>
+                <div>
+                    <h1>Quantum-Resilient Framework</h1>
+                    <span>Objective 1 — Proof of Concept</span>
+                </div>
+            </div>
+            <div class="header-status">
+                <div class="status-badge">
+                    <div class="status-dot"></div>
+                    Framework Active
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-container">
+        <!-- Architecture Overview (always visible) -->
+        <div class="card" style="margin-bottom:24px">
+            <div class="card-header">
+                <div class="card-title"><span class="icon">🏗️</span> Quantum-Resilient Architecture Overview</div>
+                <span class="card-badge badge-quantum">3-Layer Design</span>
+            </div>
+            <div class="arch-diagram">
+                <div class="arch-layer">
+                    <h3 style="color:var(--accent-quantum)">Layer 1: QKD</h3>
+                    <p style="font-size:11px;color:var(--accent-quantum);margin-bottom:10px">Quantum Key Distribution</p>
+                    <ul>
+                        <li>BB84 Protocol Simulation</li>
+                        <li>Qubit Preparation & Measurement</li>
+                        <li>Basis Reconciliation (Sifting)</li>
+                        <li>QBER Eavesdrop Detection</li>
+                        <li>Privacy Amplification (SHA-256)</li>
+                    </ul>
+                </div>
+                <div class="arch-layer">
+                    <h3 style="color:var(--accent-teal)">Layer 2: Post-Quantum</h3>
+                    <p style="font-size:11px;color:var(--accent-teal);margin-bottom:10px">Lattice-Based Cryptography</p>
+                    <ul>
+                        <li>CRYSTALS-Kyber Inspired KEM</li>
+                        <li>Ring-LWE Key Encapsulation</li>
+                        <li>CRYSTALS-Dilithium Signatures</li>
+                        <li>Configurable Security Levels</li>
+                        <li>NIST PQC Standard Aligned</li>
+                    </ul>
+                </div>
+                <div class="arch-layer">
+                    <h3 style="color:var(--accent-rose)">Layer 3: Hybrid</h3>
+                    <p style="font-size:11px;color:var(--accent-rose);margin-bottom:10px">Integration & Orchestration</p>
+                    <ul>
+                        <li>HKDF Key Fusion (QKD + PQC)</li>
+                        <li>AES-256-GCM Encryption</li>
+                        <li>Defense-in-Depth Design</li>
+                        <li>Classical/Quantum Fallback</li>
+                        <li>Dynamic Network Support</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="tab-nav">
+            <button class="tab-btn active" onclick="switchTab('bb84')">🔬 BB84 QKD Protocol</button>
+            <button class="tab-btn" onclick="switchTab('pqc')">🛡️ Post-Quantum Crypto</button>
+            <button class="tab-btn" onclick="switchTab('hybrid')">🔗 Hybrid Encryption</button>
+            <button class="tab-btn" onclick="switchTab('network')">🌐 Network Topology</button>
+        </div>
+
+        <!-- ═══════════ BB84 QKD Tab ═══════════ -->
+        <div id="tab-bb84" class="tab-content active">
+            <div class="grid-4" style="margin-bottom:20px">
+                <div class="stat-card">
+                    <div class="stat-value quantum" id="stat-qubits">—</div>
+                    <div class="stat-label">Qubits Sent</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value teal" id="stat-sifted">—</div>
+                    <div class="stat-label">Sifted Key Bits</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value green" id="stat-qber">—</div>
+                    <div class="stat-label">QBER</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value green" id="stat-status">—</div>
+                    <div class="stat-label">Security Status</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title"><span class="icon">⚙️</span> BB84 Configuration</div>
+                </div>
+                <div class="controls">
+                    <div class="control-group">
+                        <label>Number of Qubits</label>
+                        <input type="number" id="bb84-qubits" value="256" min="32" max="2048" step="32">
+                    </div>
+                    <div class="control-group">
+                        <label>Eavesdropper (Eve)</label>
+                        <label class="toggle">
+                            <input type="checkbox" id="bb84-eve">
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label">Enable Eve</span>
+                        </label>
+                    </div>
+                    <button class="btn btn-primary" onclick="runBB84()">
+                        ▶ Run BB84 Protocol
+                    </button>
+                </div>
+
+                <div class="security-meter">
+                    <div class="security-meter-fill meter-secure" id="qber-meter-fill" style="width:0%"></div>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted)">
+                    <span>0% QBER</span>
+                    <span style="color:var(--accent-amber)">11% Threshold</span>
+                    <span style="color:var(--accent-rose)">25%</span>
+                </div>
+            </div>
+
+            <div id="bb84-results" class="result-panel">
+                <p style="color:var(--text-muted);text-align:center;padding:40px">
+                    Click "Run BB84 Protocol" to simulate quantum key distribution.<br>
+                    Toggle the eavesdropper switch to see how interception is detected.
+                </p>
+            </div>
+        </div>
+
+        <!-- ═══════════ PQC Tab ═══════════ -->
+        <div id="tab-pqc" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title"><span class="icon">🛡️</span> Lattice-Based Key Encapsulation</div>
+                    <span class="card-badge badge-quantum">CRYSTALS-Kyber Inspired</span>
+                </div>
+                <div class="controls">
+                    <div class="control-group">
+                        <label>Security Level</label>
+                        <select id="pqc-level">
+                            <option value="1">Level 1 (Kyber-512)</option>
+                            <option value="2">Level 2 (Kyber-768)</option>
+                            <option value="3" selected>Level 3 (Kyber-1024)</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-teal" onclick="runPQC()">
+                        ▶ Run KEM Demo
+                    </button>
+                </div>
+            </div>
+
+            <div id="pqc-results" class="result-panel">
+                <p style="color:var(--text-muted);text-align:center;padding:40px">
+                    Click "Run KEM Demo" to generate lattice-based keys and demonstrate<br>
+                    key encapsulation / decapsulation (inspired by CRYSTALS-Kyber / ML-KEM).
+                </p>
+            </div>
+        </div>
+
+        <!-- ═══════════ Hybrid Tab ═══════════ -->
+        <div id="tab-hybrid" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title"><span class="icon">🔗</span> Full Hybrid Encryption Pipeline</div>
+                    <span class="card-badge badge-secure">4-Layer Security</span>
+                </div>
+
+                <!-- Pipeline visualization -->
+                <div class="pipeline" id="hybrid-pipeline">
+                    <div class="pipeline-stage"><h5>BB84 QKD</h5><p>Quantum Key</p></div>
+                    <div class="pipeline-arrow">→</div>
+                    <div class="pipeline-stage"><h5>Lattice-KEM</h5><p>PQC Key</p></div>
+                    <div class="pipeline-arrow">→</div>
+                    <div class="pipeline-stage"><h5>HKDF</h5><p>Key Fusion</p></div>
+                    <div class="pipeline-arrow">→</div>
+                    <div class="pipeline-stage"><h5>AES-256-GCM</h5><p>Encrypt</p></div>
+                    <div class="pipeline-arrow">→</div>
+                    <div class="pipeline-stage"><h5>Verify</h5><p>Decrypt</p></div>
+                </div>
+
+                <div class="controls">
+                    <div class="control-group" style="flex:1">
+                        <label>Message to Encrypt</label>
+                        <textarea id="hybrid-message" rows="2" style="width:100%;resize:vertical">Hello, Quantum World! This message is protected by a hybrid quantum-classical cryptographic framework.</textarea>
+                    </div>
+                    <div class="control-group">
+                        <label>QKD Qubits</label>
+                        <input type="number" id="hybrid-qubits" value="256" min="64" max="1024">
+                    </div>
+                    <div class="control-group">
+                        <label>Eavesdropper</label>
+                        <label class="toggle">
+                            <input type="checkbox" id="hybrid-eve">
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label">Eve</span>
+                        </label>
+                    </div>
+                    <button class="btn btn-primary" onclick="runHybrid()">
+                        ▶ Run Full Pipeline
+                    </button>
+                </div>
+            </div>
+
+            <div id="hybrid-results" class="result-panel">
+                <p style="color:var(--text-muted);text-align:center;padding:40px">
+                    Click "Run Full Pipeline" to execute the complete hybrid encryption:<br>
+                    BB84 QKD → Lattice-KEM → HKDF Key Fusion → AES-256-GCM Encryption → Decryption Verification
+                </p>
+            </div>
+        </div>
+
+        <!-- ═══════════ Network Tab ═══════════ -->
+        <div id="tab-network" class="tab-content">
+            <div class="grid-2" style="margin-bottom:20px">
+                <div class="stat-card">
+                    <div class="stat-value quantum" id="stat-nodes">0</div>
+                    <div class="stat-label">Network Nodes</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value teal" id="stat-edges">0</div>
+                    <div class="stat-label">Secure Connections</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title"><span class="icon">➕</span> Add Node</div>
+                </div>
+                <div class="controls">
+                    <div class="control-group">
+                        <label>Node ID</label>
+                        <input type="text" id="net-node-id" placeholder="e.g. Arnav">
+                    </div>
+                    <div class="control-group">
+                        <label>Node Type</label>
+                        <select id="net-node-type">
+                            <option value="quantum">⚛️ Quantum</option>
+                            <option value="classical">💻 Classical</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" onclick="addNetworkNode()">Add Node</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title"><span class="icon">🔗</span> Connect Nodes</div>
+                </div>
+                <div class="controls">
+                    <div class="control-group">
+                        <label>Node A</label>
+                        <select id="net-connect-a"><option value="">Select node...</option></select>
+                    </div>
+                    <div class="control-group">
+                        <label>Node B</label>
+                        <select id="net-connect-b"><option value="">Select node...</option></select>
+                    </div>
+                    <div class="control-group">
+                        <label>Eavesdropper</label>
+                        <label class="toggle">
+                            <input type="checkbox" id="net-eve">
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label">Eve</span>
+                        </label>
+                    </div>
+                    <button class="btn btn-teal" onclick="connectNodes()">Connect</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title"><span class="icon">🌐</span> Network Topology</div>
+                </div>
+                <div class="network-canvas" id="network-canvas">
+                    <p style="color:var(--text-muted);text-align:center;padding-top:130px;font-size:13px">
+                        Add nodes and connections to visualize the quantum network
+                    </p>
+                </div>
+            </div>
+
+            <div id="network-results"></div>
+        </div>
+    </main>
+
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
