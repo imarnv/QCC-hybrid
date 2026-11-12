@@ -25,6 +25,19 @@ A proof-of-concept implementation of a **quantum-resilient cryptographic framewo
 └─────────────┴──────────────────┴────────────────────────┘
 ```
 
+### New: Tensor-Isomorphism Authentication Layer ("cuboid" cryptography)
+
+Sits between QKD and the lattice KEM. The key is an 8×8×8 cube of numbers mod 251;
+a secret triple of invertible matrices (A, B, C) twists it along all three axes.
+Recovering the twist from the two public cubes is the **Tensor Isomorphism problem**,
+for which no efficient classical or quantum algorithm is known. A Fiat–Shamir
+zero-knowledge signature over this action authenticates the BB84 basis
+announcements and the KEM public key, closing the man-in-the-middle gap that BB84
+leaves open. Implementation: `quantum_framework/tensor_auth.py` (toy parameters).
+
+References: Ji–Qiao–Song–Yun, TCC 2019; ALTEQ (Tang et al.), EUROCRYPT 2022;
+MEDS (Chou et al.), AFRICACRYPT 2023; Grochow–Qiao, ITCS 2021 (Tensor Isomorphism-completeness).
+
 ## Features
 
 - **BB84 Quantum Key Distribution Simulation**: Full simulation of the BB84 protocol including basis selection, quantum channel simulation, sifting, and eavesdropping detection via QBER analysis

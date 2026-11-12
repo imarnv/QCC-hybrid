@@ -11,6 +11,7 @@ resilient against both classical and quantum computing attacks.
 from .bb84_qkd import BB84Protocol
 from .post_quantum import LatticeKEM, LatticeSigner
 from .hybrid_crypto import HybridCryptoEngine
+from .tensor_auth import TensorSigner
 from .network_node import QuantumNode, QuantumNetwork
 
 __version__ = "1.0.0"
@@ -19,6 +20,7 @@ __all__ = [
     "LatticeKEM",
     "LatticeSigner",
     "HybridCryptoEngine",
+    "TensorSigner",
     "QuantumNode",
     "QuantumNetwork",
 ]

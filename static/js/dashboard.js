@@ -162,6 +162,62 @@ async function runPQC() {
     }
 }
 
+// ── Tensor Auth ──────────────────────────────
+function renderCube(tensor, q) {
+    const n = tensor.length;
+    let html = '<div class="cube-stage"><div class="cube3d">';
+    for (let k = 0; k < n; k++) {
+        html += `<div class="cube-slice" style="grid-template:repeat(${n},1fr)/repeat(${n},1fr);transform:translateZ(${(k - (n - 1) / 2) * 18}px)">`;
+        for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+            const v = tensor[i][j][k];
+            html += `<div class="cube-cell" style="background:hsla(${18 + 110 * v / q},42%,48%,0.7)" title="T[${i}][${j}][${k}] = ${v}"></div>`;
+        }
+        html += '</div>';
+    }
+    return html + '</div></div>';
+}
+
+async function runTensor() {
+    const resultsEl = document.getElementById('tensor-results');
+    showLoading(resultsEl);
+    const message = document.getElementById('tensor-message').value;
+
+    try {
+        const res = await fetch(API + '/api/tensor/demo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message })
+        });
+        const r = (await res.json()).result;
+        const v = r.verification;
+        const q = 251;
+
+        let html = '<div class="card"><div class="card-header"><div class="card-title"><span class="icon">🧊</span>The Secret Twist</div>';
+        html += '<span class="card-badge badge-warning">8 × 8 × 8 cube over F₂₅₁</span></div>';
+        html += '<div class="cube-row">';
+        html += '<div class="cube-col"><h4>Public cube T₀</h4>' + renderCube(r.cube_before, q) + '</div>';
+        html += '<div class="cube-arrow">→<span>secret (A, B, C)</span><code>A[0..2] = ' + JSON.stringify(r.secret_A_preview) + '</code></div>';
+        html += '<div class="cube-col"><h4>Public cube T₁ = (A,B,C)·T₀</h4>' + renderCube(r.cube_after, q) + '</div>';
+        html += '</div></div>';
+
+        html += '<div class="card"><div class="card-header"><div class="card-title"><span class="icon">✍️</span>Signature Verification</div>';
+        html += `<span class="card-badge ${v.genuine_signature ? 'badge-secure' : 'badge-danger'}">${v.genuine_signature ? 'VALID' : 'INVALID'}</span></div>`;
+        html += createDataGrid({
+            'Genuine signature': v.genuine_signature ? '✅ Accepted' : '❌ Rejected',
+            'Tampered message': v.tampered_message ? '⚠️ Accepted' : '🛑 Rejected',
+            'Attacker public key': v.attacker_public_key ? '⚠️ Accepted' : '🛑 Rejected',
+        });
+        html += '<div class="key-display" style="margin-top:12px"><strong>Challenge digest (SHA-256):</strong><br>' + r.signature_digest + '</div></div>';
+
+        html += '<div class="card"><div class="card-header"><div class="card-title"><span class="icon">📐</span>Algorithm &amp; Sizes</div></div>';
+        html += createDataGrid({ ...r.info, ...r.sizes, ...Object.fromEntries(Object.entries(r.timing_ms).map(([k, t]) => [k + '_ms', t])) }) + '</div>';
+
+        resultsEl.innerHTML = html;
+    } catch (e) {
+        resultsEl.innerHTML = `<div class="card"><p style="color:var(--accent-rose)">Error: ${e.message}</p></div>`;
+    }
+}
+
 // ── Hybrid Encryption ────────────────────────
 async function runHybrid() {
     const resultsEl = document.getElementById('hybrid-results');
@@ -208,14 +264,19 @@ async function runHybrid() {
         if (r.qkd.steps) html += '<div style="margin-top:16px">' + createSteps(r.qkd.steps) + '</div>';
         html += '</div>';
 
+        // Tensor Auth Layer
+        html += '<div class="card"><div class="card-header"><div class="card-title"><span class="icon">🧊</span>Layer 2: Tensor-Isomorphism Authentication</div>';
+        html += `<span class="card-badge ${r.auth.verified ? 'badge-secure' : 'badge-danger'}">${r.auth.verified ? 'TRANSCRIPT AUTHENTIC' : 'FORGED'}</span></div>`;
+        html += createDataGrid(r.auth) + '</div>';
+
         // PQC Layer
-        html += '<div class="card"><div class="card-header"><div class="card-title"><span class="icon">🛡️</span>Layer 2: Post-Quantum Cryptography</div>';
+        html += '<div class="card"><div class="card-header"><div class="card-title"><span class="icon">🛡️</span>Layer 3: Post-Quantum Cryptography</div>';
         html += '<span class="card-badge badge-quantum">Lattice-Based</span></div>';
         html += createDataGrid(r.pqc) + '</div>';
 
         // Hybrid Pipeline
         const hp = r.hybrid_pipeline;
-        html += '<div class="card"><div class="card-header"><div class="card-title"><span class="icon">🔗</span>Layer 3: Hybrid Key Derivation</div></div>';
+        html += '<div class="card"><div class="card-header"><div class="card-title"><span class="icon">🔗</span>Layer 4: Hybrid Key Derivation</div></div>';
         html += createDataGrid(hp.key_derivation) + '</div>';
 
         // Encryption result
@@ -284,7 +345,9 @@ async function connectNodes() {
     const data = await res.json();
     const c = data.connection;
 
-    let html = '<div class="card"><div class="card-header"><div class="card-title"><span class="icon">🔗</span>Connection Established</div></div>';
+    let html = c.compromised
+        ? '<div class="card"><div class="card-header"><div class="card-title"><span class="icon">⚠️</span>Eve Detected: Link Compromised (messages will be blocked)</div></div>'
+        : '<div class="card"><div class="card-header"><div class="card-title"><span class="icon">🔗</span>Connection Established</div></div>';
     if (c.security_summary) {
         html += createDataGrid(c.security_summary);
     }
@@ -301,65 +364,173 @@ async function connectNodes() {
     refreshNetwork();
 }
 
+function esc(t) {
+    return String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// Node positions in % of the canvas, so layout works even while the tab is hidden.
+let netPos = {};
+
 async function refreshNetwork() {
     const res = await fetch(API + '/api/network/topology');
     const data = await res.json();
     const topo = data.topology;
-
-    // Update canvas
-    const canvas = document.getElementById('network-canvas');
-    canvas.innerHTML = '';
-
-    const w = canvas.offsetWidth;
-    const h = canvas.offsetHeight;
     const nodes = topo.nodes;
 
-    // SVG for edges
-    let svg = `<svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;">`;
+    const canvas = document.getElementById('network-canvas');
+    if (!nodes.length) return;
+    canvas.innerHTML = '';
 
-    const positions = {};
+    netPos = {};
     nodes.forEach((n, i) => {
         const angle = (2 * Math.PI * i) / nodes.length - Math.PI / 2;
-        const rx = w * 0.35;
-        const ry = h * 0.35;
-        const x = w / 2 + rx * Math.cos(angle) - 30;
-        const y = h / 2 + ry * Math.sin(angle) - 30;
-        positions[n.node_id] = { x: x + 30, y: y + 30 };
+        netPos[n.node_id] = { x: 50 + 35 * Math.cos(angle), y: 50 + 35 * Math.sin(angle) };
+    });
 
+    let svg = '<svg class="net-edges">';
+    topo.edges.forEach(e => {
+        const a = netPos[e.source], b = netPos[e.target];
+        if (!a || !b) return;
+        svg += `<line x1="${a.x}%" y1="${a.y}%" x2="${b.x}%" y2="${b.y}%" class="${e.compromised ? 'bad' : 'ok'}"/>`;
+    });
+    svg += '</svg>';
+    canvas.insertAdjacentHTML('afterbegin', svg);
+
+    topo.edges.filter(e => e.compromised).forEach(e => {
+        const a = netPos[e.source], b = netPos[e.target];
+        const eve = document.createElement('div');
+        eve.className = 'net-eve';
+        eve.style.left = (a.x + b.x) / 2 + '%';
+        eve.style.top = (a.y + b.y) / 2 + '%';
+        eve.title = 'Eve detected on this link';
+        eve.textContent = '👁';
+        canvas.appendChild(eve);
+    });
+
+    nodes.forEach(n => {
         const el = document.createElement('div');
         el.className = `network-node ${n.type}`;
-        el.style.left = x + 'px';
-        el.style.top = y + 'px';
-        el.innerHTML = `<span>${n.type === 'quantum' ? '⚛️' : '💻'}</span><span>${n.node_id}</span>`;
+        el.dataset.id = n.node_id;
+        el.style.left = netPos[n.node_id].x + '%';
+        el.style.top = netPos[n.node_id].y + '%';
+        el.innerHTML = `<span>${n.type === 'quantum' ? '⚛️' : '💻'}</span><span>${esc(n.node_id)}</span>`;
         el.title = `${n.node_id} (${n.type}) - ${n.active_connections} connections`;
         canvas.appendChild(el);
     });
 
-    topo.edges.forEach(e => {
-        const a = positions[e.source];
-        const b = positions[e.target];
-        if (a && b) {
-            svg += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="rgba(99,102,241,0.4)" stroke-width="2" stroke-dasharray="6,4"/>`;
-        }
+    const opts = nodes.map(n => `<option value="${esc(n.node_id)}">${esc(n.node_id)}</option>`).join('');
+    ['net-connect-a', 'net-connect-b', 'net-send-from', 'net-send-to'].forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        const prev = sel.value;
+        sel.innerHTML = '<option value="">Select node...</option>' + opts;
+        if (prev) sel.value = prev;
     });
-
-    svg += '</svg>';
-    canvas.insertAdjacentHTML('afterbegin', svg);
-
-    // Update dropdowns
-    const selA = document.getElementById('net-connect-a');
-    const selB = document.getElementById('net-connect-b');
-    if (selA && selB) {
-        const opts = nodes.map(n => `<option value="${n.node_id}">${n.node_id}</option>`).join('');
-        const prevA = selA.value, prevB = selB.value;
-        selA.innerHTML = '<option value="">Select node...</option>' + opts;
-        selB.innerHTML = '<option value="">Select node...</option>' + opts;
-        if (prevA) selA.value = prevA;
-        if (prevB) selB.value = prevB;
-    }
 
     document.getElementById('stat-nodes').textContent = topo.node_count;
     document.getElementById('stat-edges').textContent = topo.edge_count;
+}
+
+// ── Send message over the network ────────────
+async function sendNetMessage() {
+    const from = document.getElementById('net-send-from').value;
+    const to = document.getElementById('net-send-to').value;
+    const message = document.getElementById('net-send-msg').value;
+    const btn = document.getElementById('net-send-btn');
+    if (!from || !to || from === to) { alert('Pick two different nodes'); return; }
+    if (!message.trim()) { alert('Type a message to send'); return; }
+
+    btn.disabled = true;
+    const res = await fetch(API + '/api/network/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from, to, message })
+    });
+    const r = (await res.json()).result;
+
+    await animatePacket(from, to, r);
+    renderSendResult(r, message);
+    btn.disabled = false;
+}
+
+function animatePacket(from, to, r) {
+    const canvas = document.getElementById('network-canvas');
+    const a = netPos[from], b = netPos[to];
+    if (!a || !b) return Promise.resolve();
+
+    const pkt = document.createElement('div');
+    pkt.className = 'net-packet';
+    pkt.textContent = '✉️';
+    canvas.appendChild(pkt);
+
+    const at = p => ({ left: p.x + '%', top: p.y + '%' });
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const speed = reduced ? 0.01 : 1;
+    const finish = (cls, label, p) => {
+        pkt.classList.add(cls);
+        pkt.textContent = cls === 'ok' ? '✅' : '✖';
+        const tag = document.createElement('div');
+        tag.className = `net-tag ${cls}`;
+        tag.textContent = label;
+        tag.style.left = p.x + '%';
+        tag.style.top = p.y + '%';
+        canvas.appendChild(tag);
+        setTimeout(() => { pkt.remove(); tag.remove(); }, 4000);
+    };
+
+    if (r.delivered) {
+        return pkt.animate([at(a), at(b)], { duration: 1600 * speed, easing: 'ease-in-out', fill: 'forwards' })
+            .finished.then(() => {
+                document.querySelector(`.network-node[data-id="${CSS.escape(to)}"]`)?.animate(
+                    [{ boxShadow: '0 0 0 0 var(--accent-green-glow)' }, { boxShadow: '0 0 0 18px transparent' }],
+                    { duration: 700 });
+                finish('ok', 'Delivered', b);
+            });
+    }
+    if (r.failed_at === 'Layer 1: BB84-QKD') {
+        // Travels to Eve's spot on the link, gets caught, never reaches the receiver.
+        return pkt.animate([at(a), at(mid)], { duration: 900 * speed, easing: 'ease-out', fill: 'forwards' })
+            .finished.then(() => pkt.animate(
+                [{ transform: 'translate(-50%,-50%)' }, { transform: 'translate(-30%,-50%)' }, { transform: 'translate(-70%,-50%)' }, { transform: 'translate(-50%,-50%)' }],
+                { duration: 400 * speed, iterations: 2 }).finished)
+            .then(() => finish('bad', `Blocked: Eve detected (QBER ${r.qber}%)`, mid));
+    }
+    // Not connected: packet can't leave the sender.
+    return pkt.animate([at(a), at({ x: a.x + (b.x - a.x) * 0.15, y: a.y + (b.y - a.y) * 0.15 }), at(a)],
+        { duration: 800 * speed, fill: 'forwards' }).finished.then(() => finish('bad', 'No connection', a));
+}
+
+function renderSendResult(r, message) {
+    const steps = [];
+    const failed = r.failed_at;
+    const add = (name, ok, detail) => steps.push({ name, ok, detail });
+
+    add('Connection', failed !== 'Connection' && failed !== 'Lookup',
+        failed === 'Connection' || failed === 'Lookup' ? r.reason : `Link ${r.connection_id}`);
+    if (failed === 'Layer 1: BB84-QKD') {
+        add('Layer 1: BB84-QKD', false, r.reason);
+    } else if (!failed) {
+        add('Layer 1: BB84-QKD', true, r.quantum ? `QBER ${r.qber}% (below 11%), no eavesdropper` : 'Skipped: classical node, no quantum channel (PQC only)');
+        add('Layer 2: Tensor-Auth', true, 'Peer public key signature verified');
+        add('Layer 3: Lattice-KEM', true, 'Post-quantum shared secret in session key');
+        add('Layer 4: AES-256-GCM', true, `Ciphertext ${r.encrypted.ciphertext_hex}`);
+        add('Delivered', true, `${r.to} decrypted: "${r.decrypted}"`);
+    }
+    const allNames = ['Connection', 'Layer 1: BB84-QKD', 'Layer 2: Tensor-Auth', 'Layer 3: Lattice-KEM', 'Layer 4: AES-256-GCM', 'Delivered'];
+    allNames.slice(steps.length).forEach(n => steps.push({ name: n, ok: null, detail: 'Not reached' }));
+
+    const title = r.delivered ? `✅ Message delivered: ${r.from} → ${r.to}` : `⛔ Message NOT sent: ${r.from} → ${r.to}`;
+    let html = `<div class="card send-result ${r.delivered ? 'ok' : 'bad'}"><div class="card-header"><div class="card-title">${esc(title)}</div></div>`;
+    if (!r.delivered) html += `<p class="send-fail">Failed at <strong>${esc(failed)}</strong>: ${esc(r.reason)}</p>`;
+    html += '<ol class="send-steps">';
+    steps.forEach(s => {
+        const cls = s.ok === null ? 'skip' : s.ok ? 'ok' : 'bad';
+        const icon = s.ok === null ? '○' : s.ok ? '✓' : '✗';
+        html += `<li class="${cls}"><span class="ico">${icon}</span><span class="nm">${esc(s.name)}</span><span class="dt">${esc(s.detail)}</span></li>`;
+    });
+    html += '</ol></div>';
+    document.getElementById('network-results').innerHTML = html;
 }
 
 // ── Init ─────────────────────────────────────

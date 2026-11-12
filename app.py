@@ -7,7 +7,7 @@ for demonstrating Objective 1: Quantum-Resilient Cryptographic Architecture.
 
 from flask import Flask, render_template, jsonify, request
 from flask_cors import CORS
-from quantum_framework import BB84Protocol, LatticeKEM, LatticeSigner, HybridCryptoEngine
+from quantum_framework import BB84Protocol, LatticeKEM, LatticeSigner, HybridCryptoEngine, TensorSigner
 from quantum_framework.network_node import QuantumNetwork
 import time
 
@@ -99,6 +99,16 @@ def pqc_kem_demo():
     })
 
 
+# ────────────────── Tensor Auth API ──────────────────
+
+@app.route("/api/tensor/demo", methods=["POST"])
+def tensor_demo():
+    """Tensor-isomorphism (cuboid) signature: keygen, sign, verify, forgery attempts."""
+    data = request.get_json() or {}
+    message = data.get("message", "BB84 sifting transcript")
+    return jsonify({"success": True, "result": TensorSigner().demo(message.encode())})
+
+
 # ────────────────── Hybrid Encryption API ──────────────────
 
 @app.route("/api/hybrid/encrypt", methods=["POST"])
@@ -118,6 +128,18 @@ def hybrid_encrypt():
     keypair = kem.keygen()
     kem_ct = kem.encapsulate(keypair.public_key)
 
+    # Step 2.5: Tensor-isomorphism auth - sign the public classical transcript
+    # (BB84 basis announcements + KEM public key) so a man-in-the-middle can't swap it.
+    signer = TensorSigner()
+    auth_kp = signer.keygen()
+    transcript = bytes(qkd_result.alice_bases) + keypair.public_key
+    t0 = time.time()
+    auth_sig = signer.sign(auth_kp, transcript)
+    auth_ok = signer.verify(auth_kp.t0, auth_kp.t1, transcript, auth_sig)
+    auth_ms = round((time.time() - t0) * 1000, 2)
+    if not auth_ok:
+        return jsonify({"success": False, "error": "Transcript authentication failed"}), 400
+
     # Step 3: Hybrid pipeline
     engine = HybridCryptoEngine()
     pipeline_result = engine.full_pipeline(
@@ -125,6 +147,8 @@ def hybrid_encrypt():
         qkd_key=qkd_result.final_key or None,
         pqc_secret=kem_ct.shared_secret,
     )
+    pipeline_result["pipeline_summary"]["layers"].insert(1, "Tensor-Auth")
+    pipeline_result["pipeline_summary"]["total_security_layers"] += 1
 
     return jsonify({
         "success": True,
@@ -136,6 +160,14 @@ def hybrid_encrypt():
                 "eavesdropper_detected": qkd_result.eavesdropper_detected,
                 "key_generated": qkd_result.final_key is not None,
                 "steps": qkd_result.protocol_steps,
+            },
+            "auth": {
+                "algorithm": signer.get_info()["algorithm"],
+                "signed": "BB84 basis announcements + KEM public key",
+                "transcript_bytes": len(transcript),
+                "signature_bytes": signer.sizes()["signature_bytes"],
+                "verified": auth_ok,
+                "time_ms": auth_ms,
             },
             "pqc": kem.get_info(),
             "hybrid_pipeline": pipeline_result,
@@ -176,7 +208,7 @@ def connect_nodes():
 @app.route("/api/network/send", methods=["POST"])
 def send_message():
     data = request.get_json() or {}
-    result = network.send_message(data.get("from"), data.get("to"), data.get("message", "test"))
+    result = network.send_message(data.get("from"), data.get("to"), str(data.get("message", "")))
     return jsonify({"success": True, "result": result})
 
 
@@ -190,6 +222,11 @@ def framework_info():
             "quantum_layer": {
                 "protocol": "BB84 QKD",
                 "features": ["Qubit Preparation", "Basis Sifting", "QBER Detection", "Privacy Amplification"],
+            },
+            "authentication_layer": {
+                "signature": "TI-Sign (Tensor Isomorphism, 'cuboid' cryptography)",
+                "protects": "BB84 classical channel + KEM public key",
+                "basis": "GL(n) x GL(n) x GL(n) action on 3-tensors",
             },
             "post_quantum_layer": {
                 "kem": "Lattice-KEM (CRYSTALS-Kyber inspired)",

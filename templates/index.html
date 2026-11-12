@@ -32,10 +32,10 @@
         <div class="card" style="margin-bottom:24px">
             <div class="card-header">
                 <div class="card-title"><span class="icon">🏗️</span> Quantum-Resilient Architecture Overview</div>
-                <span class="card-badge badge-quantum">3-Layer Design</span>
+                <span class="card-badge badge-quantum">4-Layer Design</span>
             </div>
             <div class="arch-diagram">
-                <div class="arch-layer">
+                <div class="arch-layer" data-layer="1" role="button" tabindex="0" aria-label="Explore layer 1">
                     <h3 style="color:var(--accent-quantum)">Layer 1: QKD</h3>
                     <p style="font-size:11px;color:var(--accent-quantum);margin-bottom:10px">Quantum Key Distribution</p>
                     <ul>
@@ -46,19 +46,29 @@
                         <li>Privacy Amplification (SHA-256)</li>
                     </ul>
                 </div>
-                <div class="arch-layer">
-                    <h3 style="color:var(--accent-teal)">Layer 2: Post-Quantum</h3>
+                <div class="arch-layer" data-layer="2" role="button" tabindex="0" aria-label="Explore layer 2">
+                    <h3 style="color:var(--accent-amber)">Layer 2: Tensor Auth ✦ New</h3>
+                    <p style="font-size:11px;color:var(--accent-amber);margin-bottom:10px">Cuboid (Tensor-Isomorphism) Signatures</p>
+                    <ul>
+                        <li>3D n×n×n Cube Key Object</li>
+                        <li>Secret Twist (A, B, C) on 3 Axes</li>
+                        <li>Fiat–Shamir Zero-Knowledge Signature</li>
+                        <li>Authenticates BB84 Classical Channel</li>
+                        <li>Blocks Man-in-the-Middle Key Swap</li>
+                    </ul>
+                </div>
+                <div class="arch-layer" data-layer="3" role="button" tabindex="0" aria-label="Explore layer 3">
+                    <h3 style="color:var(--accent-teal)">Layer 3: Post-Quantum</h3>
                     <p style="font-size:11px;color:var(--accent-teal);margin-bottom:10px">Lattice-Based Cryptography</p>
                     <ul>
                         <li>CRYSTALS-Kyber Inspired KEM</li>
                         <li>Ring-LWE Key Encapsulation</li>
-                        <li>CRYSTALS-Dilithium Signatures</li>
                         <li>Configurable Security Levels</li>
                         <li>NIST PQC Standard Aligned</li>
                     </ul>
                 </div>
-                <div class="arch-layer">
-                    <h3 style="color:var(--accent-rose)">Layer 3: Hybrid</h3>
+                <div class="arch-layer" data-layer="4" role="button" tabindex="0" aria-label="Explore layer 4">
+                    <h3 style="color:var(--accent-rose)">Layer 4: Hybrid</h3>
                     <p style="font-size:11px;color:var(--accent-rose);margin-bottom:10px">Integration & Orchestration</p>
                     <ul>
                         <li>HKDF Key Fusion (QKD + PQC)</li>
@@ -69,11 +79,25 @@
                     </ul>
                 </div>
             </div>
+            <p class="lab-intro">Pick a layer to watch it work ↓</p>
+            <div class="layer-lab">
+                <div class="lab-stage">
+                    <canvas id="lab-canvas" aria-label="Interactive animation of the selected layer"></canvas>
+                    <span class="lab-hint" id="lab-hint"></span>
+                </div>
+                <aside class="lab-side">
+                    <h4 id="lab-title"></h4>
+                    <p id="lab-desc"></p>
+                    <div class="lab-controls" id="lab-controls"></div>
+                    <div class="lab-readout" id="lab-readout"></div>
+                </aside>
+            </div>
         </div>
 
         <!-- Tab Navigation -->
         <div class="tab-nav">
             <button class="tab-btn active" onclick="switchTab('bb84')">🔬 BB84 QKD Protocol</button>
+            <button class="tab-btn" onclick="switchTab('tensor')">🧊 Tensor Auth</button>
             <button class="tab-btn" onclick="switchTab('pqc')">🛡️ Post-Quantum Crypto</button>
             <button class="tab-btn" onclick="switchTab('hybrid')">🔗 Hybrid Encryption</button>
             <button class="tab-btn" onclick="switchTab('network')">🌐 Network Topology</button>
@@ -140,6 +164,38 @@
             </div>
         </div>
 
+        <!-- ═══════════ Tensor Auth Tab ═══════════ -->
+        <div id="tab-tensor" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title"><span class="icon">🧊</span> Tensor-Isomorphism Authentication</div>
+                    <span class="card-badge badge-warning">Research-Stage PQC</span>
+                </div>
+                <div class="steps-container" style="margin-bottom:20px">
+                    <div class="step"><div class="step-number">1</div><div class="step-content"><h4>Public cube T₀</h4><p>A random 8×8×8 cube of numbers mod 251, published by everyone.</p></div></div>
+                    <div class="step"><div class="step-number">2</div><div class="step-content"><h4>Secret twist (A, B, C)</h4><p>Three secret invertible matrices mix the cube along its x, y and z axes, giving public cube T₁.</p></div></div>
+                    <div class="step"><div class="step-number">3</div><div class="step-content"><h4>Hard problem</h4><p>Given only T₀ and T₁, finding the twist is the Tensor Isomorphism problem: no known fast classical or quantum algorithm.</p></div></div>
+                    <div class="step"><div class="step-number">4</div><div class="step-content"><h4>Zero-knowledge signature</h4><p>The signer proves they know the twist over 64 challenge rounds without revealing it (Fiat–Shamir).</p></div></div>
+                </div>
+                <div class="controls">
+                    <div class="control-group" style="flex:1">
+                        <label>Message to Sign</label>
+                        <input type="text" id="tensor-message" value="BB84 sifting transcript: bases + KEM public key" style="width:100%">
+                    </div>
+                    <button class="btn btn-primary" onclick="runTensor()">
+                        ▶ Sign &amp; Verify
+                    </button>
+                </div>
+            </div>
+
+            <div id="tensor-results" class="result-panel">
+                <p style="color:var(--text-muted);text-align:center;padding:40px">
+                    Click "Sign &amp; Verify" to twist a 3D cube with a secret key, sign a message,<br>
+                    and watch forgery attempts get rejected.
+                </p>
+            </div>
+        </div>
+
         <!-- ═══════════ PQC Tab ═══════════ -->
         <div id="tab-pqc" class="tab-content">
             <div class="card">
@@ -175,12 +231,14 @@
             <div class="card">
                 <div class="card-header">
                     <div class="card-title"><span class="icon">🔗</span> Full Hybrid Encryption Pipeline</div>
-                    <span class="card-badge badge-secure">4-Layer Security</span>
+                    <span class="card-badge badge-secure">5-Stage Security</span>
                 </div>
 
                 <!-- Pipeline visualization -->
                 <div class="pipeline" id="hybrid-pipeline">
                     <div class="pipeline-stage"><h5>BB84 QKD</h5><p>Quantum Key</p></div>
+                    <div class="pipeline-arrow">→</div>
+                    <div class="pipeline-stage"><h5>Tensor Auth</h5><p>Sign Transcript</p></div>
                     <div class="pipeline-arrow">→</div>
                     <div class="pipeline-stage"><h5>Lattice-KEM</h5><p>PQC Key</p></div>
                     <div class="pipeline-arrow">→</div>
@@ -217,7 +275,7 @@
             <div id="hybrid-results" class="result-panel">
                 <p style="color:var(--text-muted);text-align:center;padding:40px">
                     Click "Run Full Pipeline" to execute the complete hybrid encryption:<br>
-                    BB84 QKD → Lattice-KEM → HKDF Key Fusion → AES-256-GCM Encryption → Decryption Verification
+                    BB84 QKD → Tensor Auth → Lattice-KEM → HKDF Key Fusion → AES-256-GCM Encryption → Decryption Verification
                 </p>
             </div>
         </div>
@@ -289,6 +347,21 @@
                         Add nodes and connections to visualize the quantum network
                     </p>
                 </div>
+                <div class="controls" style="margin-top:16px">
+                    <div class="control-group">
+                        <label for="net-send-from">From</label>
+                        <select id="net-send-from"><option value="">Select node...</option></select>
+                    </div>
+                    <div class="control-group">
+                        <label for="net-send-to">To</label>
+                        <select id="net-send-to"><option value="">Select node...</option></select>
+                    </div>
+                    <div class="control-group" style="flex:1;min-width:200px">
+                        <label for="net-send-msg">Message</label>
+                        <input type="text" id="net-send-msg" placeholder="Type your secret message" onkeydown="if(event.key==='Enter')sendNetMessage()">
+                    </div>
+                    <button class="btn btn-primary" id="net-send-btn" onclick="sendNetMessage()">✉️ Send Message</button>
+                </div>
             </div>
 
             <div id="network-results"></div>
@@ -296,5 +369,6 @@
     </main>
 
     <script src="/static/js/dashboard.js"></script>
+    <script src="/static/js/layers.js"></script>
 </body>
 </html>

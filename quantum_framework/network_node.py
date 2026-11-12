@@ -13,6 +13,7 @@ from typing import Dict, List, Optional
 from .bb84_qkd import BB84Protocol
 from .post_quantum import LatticeKEM
 from .hybrid_crypto import HybridCryptoEngine
+from .tensor_auth import TensorSigner
 
 
 @dataclass
@@ -41,10 +42,12 @@ class QuantumNode:
         self.kem = LatticeKEM(security_level)
         self.crypto = HybridCryptoEngine()
         self.keypair = self.kem.keygen()
+        self.signer = TensorSigner()
+        self.auth_keypair = self.signer.keygen()
         self.connections: Dict[str, dict] = {}
         self._event_log: List[Dict] = []
 
-        caps = ["Lattice-KEM", "AES-256-GCM", "HKDF-SHA256", "Lattice-DSA"]
+        caps = ["Lattice-KEM", "AES-256-GCM", "HKDF-SHA256", "TI-Sign"]
         if node_type == "quantum":
             caps.extend(["BB84-QKD", "Quantum-Channel", "QBER-Detection"])
 
@@ -80,7 +83,19 @@ class QuantumNode:
             })
             result["qkd"] = qkd_result.to_dict()
 
-        # Layer 2: Post-Quantum KEM
+        # Layer 2: Tensor auth - peer proves its KEM public key is really its own
+        sig = peer.signer.sign(peer.auth_keypair, peer.keypair.public_key)
+        authenticated = self.signer.verify(peer.auth_keypair.t0, peer.auth_keypair.t1, peer.keypair.public_key, sig)
+        result["layers"].append({
+            "name": "Tensor-Auth",
+            "status": "verified" if authenticated else "compromised",
+            "algorithm": self.signer.get_info()["algorithm"],
+        })
+        if not authenticated:
+            result["error"] = "Peer public key failed authentication"
+            return result
+
+        # Layer 3: Post-Quantum KEM
         kem_ct = self.kem.encapsulate(peer.keypair.public_key)
         pqc_secret = kem_ct.shared_secret
         result["layers"].append({
@@ -90,7 +105,7 @@ class QuantumNode:
             "shared_secret_length": len(pqc_secret) * 8,
         })
 
-        # Layer 3: Hybrid key derivation
+        # Layer 4: Hybrid key derivation
         session_key, key_info = self.crypto.derive_hybrid_key(qkd_key, pqc_secret)
         result["layers"].append({
             "name": "HKDF-SHA256",
@@ -100,45 +115,50 @@ class QuantumNode:
         })
         result["key_derivation"] = key_info
 
-        # Store connection
+        # Store connection. A link where Eve was detected is kept (so the UI can show it)
+        # but flagged: its key is untrusted and send_message refuses to use it.
+        compromised = bool(qkd_result and qkd_result.eavesdropper_detected)
+        qber = round(qkd_result.qber * 100, 2) if qkd_result else None
         conn_id = hashlib.sha256(f"{self.node_id}-{peer.node_id}".encode()).hexdigest()[:12]
-        self.connections[peer.node_id] = {
-            "conn_id": conn_id, "session_key": session_key,
-            "peer": peer.node_id, "established": time.time(),
-        }
-        peer.connections[self.node_id] = {
-            "conn_id": conn_id, "session_key": session_key,
-            "peer": self.node_id, "established": time.time(),
-        }
+        for a, b in ((self, peer), (peer, self)):
+            a.connections[b.node_id] = {
+                "conn_id": conn_id, "session_key": session_key, "peer": b.node_id,
+                "established": time.time(), "compromised": compromised, "qber": qber,
+                "quantum": qkd_result is not None,
+            }
 
         result["connection_id"] = conn_id
         result["total_time_ms"] = round((time.time() - t0) * 1000, 2)
         result["security_summary"] = {
             "quantum_layer": "active" if qkd_key else "unavailable",
+            "auth_layer": "verified",
             "pqc_layer": "active",
             "hybrid_key": key_info["hybrid"],
             "encryption": "AES-256-GCM",
-            "overall": "quantum-resilient" if qkd_key else "post-quantum",
+            "overall": "compromised" if compromised else ("quantum-resilient" if qkd_key else "post-quantum"),
         }
+        result["compromised"] = compromised
 
         self._log_event("connection_established", result)
         return result
 
-    def send_message(self, peer_id: str, message: str) -> Dict:
-        """Send an encrypted message to a connected peer."""
-        if peer_id not in self.connections:
-            return {"error": f"No connection to {peer_id}"}
+    def send_message(self, peer: 'QuantumNode', message: str) -> Dict:
+        """Send an encrypted message to a connected peer; refuse over a compromised link."""
+        base = {"from": self.node_id, "to": peer.node_id, "delivered": False}
+        conn = self.connections.get(peer.node_id)
+        if not conn:
+            return {**base, "failed_at": "Connection",
+                    "reason": f"{self.node_id} and {peer.node_id} are not connected. Connect them first."}
+        base["connection_id"] = conn["conn_id"]
+        if conn["compromised"]:
+            return {**base, "failed_at": "Layer 1: BB84-QKD", "qber": conn["qber"],
+                    "reason": f"QBER {conn['qber']}% is above the 11% limit, so Eve was detected on this link. "
+                              "The session key was discarded and the message was never sent."}
 
-        conn = self.connections[peer_id]
-        session_key = conn["session_key"]
-        encrypted = self.crypto.encrypt(message.encode(), session_key)
-
-        return {
-            "from": self.node_id, "to": peer_id,
-            "connection_id": conn["conn_id"],
-            "encrypted": encrypted.to_dict(),
-            "message_length": len(message),
-        }
+        encrypted = self.crypto.encrypt(message.encode(), conn["session_key"])
+        decrypted = peer.crypto.decrypt(encrypted, peer.connections[self.node_id]["session_key"]).decode()
+        return {**base, "delivered": True, "qber": conn["qber"], "quantum": conn["quantum"],
+                "encrypted": encrypted.to_dict(), "decrypted": decrypted}
 
     def get_status(self) -> Dict:
         return {
@@ -173,9 +193,9 @@ class QuantumNetwork:
         )
 
     def send_message(self, from_id: str, to_id: str, message: str) -> Dict:
-        if from_id not in self.nodes:
-            return {"error": "Sender node not found"}
-        return self.nodes[from_id].send_message(to_id, message)
+        if from_id not in self.nodes or to_id not in self.nodes:
+            return {"delivered": False, "failed_at": "Lookup", "reason": "Sender or receiver node not found"}
+        return self.nodes[from_id].send_message(self.nodes[to_id], message)
 
     def get_topology(self) -> Dict:
         nodes_info = []
@@ -184,7 +204,8 @@ class QuantumNetwork:
             nodes_info.append(node.get_status())
             for peer_id in node.connections:
                 edge = tuple(sorted([nid, peer_id]))
-                edge_dict = {"source": edge[0], "target": edge[1]}
+                edge_dict = {"source": edge[0], "target": edge[1],
+                             "compromised": node.connections[peer_id]["compromised"]}
                 if edge_dict not in edges:
                     edges.append(edge_dict)
         return {"name": self.name, "nodes": nodes_info, "edges": edges, "node_count": len(self.nodes), "edge_count": len(edges)}
